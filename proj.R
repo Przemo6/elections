@@ -2,6 +2,7 @@
 
 library(rgdal)
 library(dplyr)
+library(spdep)
 
 
 
@@ -222,7 +223,7 @@ data <- readRDS('data/data_elections.rda')
 
 summary(data$freq)
 cols<-rev(heat.colors(8))
-brks<-(0:8)*5
+brks<-(2:5)*0.2
 plot(com, col=cols[findInterval(data$freq, brks)])
 plot(pov, add=TRUE, lwd=2)
 plot(voi, add=TRUE, lwd=3)
@@ -230,6 +231,75 @@ legend("bottomleft", legend=brks, pt.bg=cols, bty="n", pch=22)
 title(main="Frequency", sub="In legend intervals from….%")
 
 
+
+
+# spatial weight matrices
+
+cont.nb<-poly2nb(as(com, "SpatialPolygons"))
+cont.listw<-nb2listw(cont.nb, style="W")
+cont.listw # summary of matrix
+
+# coordinates of nts4 units 
+#(geometric center of gravity)
+crds<-coordinates(com)
+colnames(crds)<-c("cx", "cy")
+
+# plot of neighbourhood
+plot(com) # contour map
+plot(cont.nb, crds, add=TRUE)
+
+# conversion to class matrix
+cont.mat<-nb2mat(cont.nb)
+cont.mat[1:10, 1:10]
+
+
+
+# spatial weights matrix – k nearest neighbours
+knn<-knearneigh(crds, k=1) # knn class (k=1)
+knn.nb<-knn2nb(knn)
+plot(com)
+plot(knn.nb, crds, add=TRUE)
+
+# checking for matrix symmetry
+print(is.symmetric.nb(knn.nb))
+sym.knn.nb<-make.sym.nb(knn.nb)
+print(is.symmetric.nb(sym.knn.nb))
+
+# knn as listw class
+knn.listw<-nb2listw(sym.knn.nb)
+
+
+# spatial weights matrix – neighbours in radius of d km
+
+conti15.nb<-dnearneigh(crds, 0, 15,longlat=TRUE) # conti10 is nb class
+plot(com)
+plot(conti15.nb, crds, add=TRUE)
+conti15.m<-nb2mat(conti15.nb, zero.policy=TRUE)
+
+
+# let’s see who does not have a neighbour
+a<-colMeans(t(conti15.m))
+com$a<-a
+spplot(com, "a")
+
+
+
+# at what distance all units have at least one neighbour?
+
+# implicitly k=1, list of closests neighbours
+kkk<-knn2nb(knearneigh(crds)) 
+
+# max of distances between clostests neighbours  we get distance
+all<-max(unlist(nbdists(kkk, crds))) 
+
+# neighbours in radius of d km 
+# guaranted that all regions have at least one neighbor
+all.nb<-dnearneigh(crds, 0, all) 
+
+summary(all.nb, crds)
+plot(com, border="grey") 
+plot(all.nb, crds, add=TRUE)
+conti.all<-nb2listw(all.nb)
 
 
 
