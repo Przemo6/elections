@@ -269,13 +269,12 @@ print(is.symmetric.nb(sym.knn.nb))
 knn.listw<-nb2listw(sym.knn.nb)
 
 
-# spatial weights matrix – neighbours in radius of d km
+# spatial weights matrix – neighbours in radius of d km - może ta na 15 km
 
 conti15.nb<-dnearneigh(crds, 0, 15,longlat=TRUE) # conti10 is nb class
 plot(com)
 plot(conti15.nb, crds, add=TRUE)
 conti15.m<-nb2mat(conti15.nb, zero.policy=TRUE)
-
 
 # let’s see who does not have a neighbour
 a<-colMeans(t(conti15.m))
@@ -302,9 +301,34 @@ plot(all.nb, crds, add=TRUE)
 conti.all<-nb2listw(all.nb)
 
 
+# spatial weights matrix - inverse distance matrix
+
+knn_inv<-knearneigh(crds, k=2476) # we have 2477 units on the map
+knn_inv.nb<-knn2nb(knn_inv)
+dist<-nbdists(knn_inv.nb, crds)  
+dist1<-lapply(dist, function(x) 1/x)  # object of listw class
+knn_inv.dist.listw<-nb2listw(knn_inv.nb, glist=dist1)  # listw class object – spatial weights according to distance criterion
+
+# converting to matrix class
+knn_inv.dist.mat<-listw2mat(knn_inv.dist.listw)
+summary(knn_inv.dist.mat) # statistics of weights of all regions
 
 
 
 
+# statistics: 
+
+#Moran I
+moran1<-moran.test(data$freq, cont.listw)
+moran1
+
+moran2<-moran.test(data$freq, knn.listw)
+moran2
+
+moran3<-moran.test(data$freq, conti.all)
+moran3
+
+moran4<-moran.test(data$freq, knn_inv.dist.listw)
+moran4
 
 
