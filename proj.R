@@ -3,7 +3,7 @@
 library(rgdal)
 library(dplyr)
 library(spdep)
-
+#library(lmtest)
 
 
 # wczytanie danych
@@ -330,5 +330,65 @@ moran3
 
 moran4<-moran.test(data$freq, knn_inv.dist.listw)
 moran4
+
+
+
+# ols (od tego moran test musi wyjsc dobrze)
+
+
+# model ogolny ze wszystkim
+formula <- freq ~ expenses + femin + income + migration + people_density2019 + prework + postwork + benefit500 + unemployment + water + sewage + gas + opos + mean_enabled + place_area
+
+model_lm<-lm(formula, data=data) 
+summary(model_lm)
+
+lm.morantest(model_lm, cont.listw) # 0.07869
+
+
+# model zredukowany
+formula2 <- freq ~ expenses + femin + migration + people_density2019 + prework + postwork + benefit500 + unemployment + water + sewage + gas + opos + mean_enabled + place_area
+
+model_lm2<-lm(formula2, data=data) 
+summary(model_lm2)
+
+lrtest(model_lm, model_lm2)
+
+lm.morantest(model_lm2, cont.listw) # 0.077
+
+
+formula3 <- freq ~ expenses + femin + migration + people_density2019 + prework + postwork + benefit500 + unemployment + sewage + gas + opos + mean_enabled + place_area
+
+model_lm3<-lm(formula3, data=data) 
+summary(model_lm3)
+
+lrtest(model_lm, model_lm3)
+
+lm.morantest(model_lm3, cont.listw) # 0.07372
+
+
+
+#model dodatkowo bez sewage i gas i  place area
+
+
+formula4 <- freq ~ expenses + femin + migration + people_density2019 + prework + postwork + benefit500 + unemployment + opos + mean_enabled
+
+model_lm4<-lm(formula4, data=data) 
+summary(model_lm4)
+
+lrtest(model_lm, model_lm4) # w ten sposób już tej redukcji nie da sie uzasadnic
+
+lm.morantest(model_lm4, cont.listw) # 0.04193
+
+
+#gdy usunie sie do tego people_density (alternatywna korzystna ale mniej zmiana to usuniecie expenses)
+
+
+formula5 <- freq ~ expenses + femin + migration + prework + postwork + benefit500 + unemployment + opos + mean_enabled
+
+model_lm5<-lm(formula5, data=data) 
+summary(model_lm5)
+
+lm.morantest(model_lm5, cont.listw) # 0.02873
+
 
 
