@@ -3,7 +3,7 @@
 library(rgdal)
 library(dplyr)
 library(spdep)
-#library(lmtest)
+library(lmtest)
 
 
 # wczytanie danych
@@ -320,7 +320,7 @@ summary(knn_inv.dist.mat) # statistics of weights of all regions
 
 #Moran I
 moran1<-moran.test(data$freq, cont.listw)
-moran1
+moran1  # brak autokorelacji dla samej zmiennej freq
 
 moran2<-moran.test(data$freq, knn.listw)
 moran2
@@ -333,62 +333,231 @@ moran4
 
 
 
+# na mape
+
+# Moran scatterplot – step by step version
+
+freq_s<-as.data.frame(scale(data$freq))  #standardization of variable
+# chcecking the average and standard deviation
+round(mean(freq_s$V1),0) 
+sd(freq_s$V1)
+
+freq_l<-lag.listw(cont.listw, freq_s$V1) # spatial lag of x
+morlm<-lm(freq_l~freq_s$V1) # linear regression            
+summary(morlm)
+slope<-morlm$coefficients[2] # coefficient from regression
+intercept<-morlm$coefficients[1] # constant term in regression
+
+plot(freq_s$V1, freq_l, xlab="freq_s",ylab="spatial lag of freq_s", pch="*")  
+abline(intercept, slope)  # regression line
+abline(h=0, lty=2) # supplementary horizontal line y=0
+abline(v=0, lty=2) # supplementary vertical line x=0
+
+# Mapping of moranscatterplots quarts
+
+
+cond1<-ifelse(freq_s>=0 & freq_l>=0, 1,0)  # I quarter
+cond2<-ifelse(freq_s>=0 & freq_l<0, 2,0)  # II quarter
+cond3<-ifelse(freq_s<0 & freq_l<0, 3,0)  # III quarter
+cond4<-ifelse(freq_s<0 & freq_l>=0, 4,0)  # IV quarter
+cond.all<-cond1+cond2+cond3+cond4 # all quarters in one
+cond.all
+cond<-as.data.frame(cond.all)
+is.data.frame(cond)
+
+# map
+brks<-c(1,2,3,4)
+cols<-c("grey25", "grey60", "grey85", "grey45")
+plot(com, col=cols[findInterval(cond$V1, brks)])
+legend("bottomleft", legend=c("I Q - HH – high surrounded by high", "II Q - LH - low surrounded by high", "III Q - LL - low surrounded by low", "IV Q - HL - high surrounded by low"), fill=cols, bty="n", cex=0.80)
+title(main="Mapping of Moranscatterplot results
+frequency in 2019 elections")
+
+
+
+# join count test
+
+
+var.factor<-factor(cut(data$freq, breaks=c(0, 0.5, 0.6, 1), labels=c("low", "medium", "high")))
+head(var.factor)
+
+# parameters of graphics
+brks1<-c(0, 0.5, 0.6, 1)
+cols<-c("red", "blue", "green")
+
+# scatterplot of values
+plot(data$freq, bg=cols[findInterval(data$freq, brks1)], pch=21)
+abline(h=c(10,20,40), lty=3)
+
+# spatial distribution with three colours
+plot(com, col=cols[findInterval(data$freq, brks1)])
+plot(pov, add=TRUE, lwd=2)
+title(main="Frequency in 2019 elections")
+legend("bottomleft", legend=c("low", "medium", "high"), leglabs(brks1), fill=cols, bty="n")
+
+joincount.test(var.factor, cont.listw) # nigdzie nie ma autokorelacji
+
+
+
+# local moran
+
+
+locM<-localmoran(spNamedVec("freq", data), cont.listw)
+oid1<-order(data$Kod)
+locMorMat<-printCoefmat(data.frame(locM[oid1,], row.names=data$Kod[oid1]), check.names  = FALSE)
+
+# map of the significance of Moran's local statistics
+names(locMorMat)[5]<-"Prob"
+brks<-c(min(locMorMat[,5]), 0.05000, 0.95000, max(locMorMat[,5]))
+cols<-c("grey30", "grey90", "grey60")
+
+plot(com, col=cols[findInterval(locMorMat[,5], brks)])
+legend("bottomleft", legend=c("surrounded by relatively high values, locM>0", "insignificant", "surrounded by relatively low values, locM<0"), fill=cols, bty="n", cex=0.75)
+title(main=" Local Moran statistics ", cex=0.7)
+plot(pov, add=TRUE, lwd=2)
+
+
+########## powtórzenie calych statystyk dla opos - nie wykonywac
+ 
+
+#Moran I
+moran1<-moran.test(data$opos, cont.listw)
+moran1  # jest autokorelacja dla samej zmiennej opos
+
+moran2<-moran.test(data$opos, knn.listw)
+moran2 # tu juz nie ma
+
+moran3<-moran.test(data$opos, conti.all)
+moran3 # tu tez nie
+
+moran4<-moran.test(data$opos, knn_inv.dist.listw)
+moran4 # ani tu
+
+
+
+# na mape
+
+# Moran scatterplot – step by step version
+
+opos_s<-as.data.frame(scale(data$opos))  #standardization of variable
+# chcecking the average and standard deviation
+round(mean(opos_s$V1),0) 
+sd(opos_s$V1)
+
+opos_l<-lag.listw(cont.listw, opos_s$V1) # spatial lag of x
+morlm<-lm(opos_l~opos_s$V1) # linear regression            
+summary(morlm)
+slope<-morlm$coefficients[2] # coefficient from regression
+intercept<-morlm$coefficients[1] # constant term in regression
+
+plot(opos_s$V1, opos_l, xlab="opos_s",ylab="spatial lag of opos_s", pch="*")  
+abline(intercept, slope)  # regression line
+abline(h=0, lty=2) # supplementary horizontal line y=0
+abline(v=0, lty=2) # supplementary vertical line x=0
+
+# Mapping of moranscatterplots quarts
+
+cond1<-ifelse(opos_s>=0 & opos_l>=0, 1,0)  # I quarter
+cond2<-ifelse(opos_s>=0 & opos_l<0, 2,0)  # II quarter
+cond3<-ifelse(opos_s<0 & opos_l<0, 3,0)  # III quarter
+cond4<-ifelse(opos_s<0 & opos_l>=0, 4,0)  # IV quarter
+cond.all<-cond1+cond2+cond3+cond4 # all quarters in one
+cond.all
+cond<-as.data.frame(cond.all)
+is.data.frame(cond)
+
+# map
+brks<-c(1,2,3,4)
+cols<-c("grey25", "grey60", "grey85", "grey45")
+plot(com, col=cols[findInterval(cond$V1, brks)])
+legend("bottomleft", legend=c("I Q - HH – high surrounded by high", "II Q - LH - low surrounded by high", "III Q - LL - low surrounded by low", "IV Q - HL - high surrounded by low"), fill=cols, bty="n", cex=0.80)
+title(main="Mapping of Moranscatterplot results
+oposition results in 2019 elections")
+
+
+
+# join count test
+
+summary(data$opos)
+var.factor<-factor(cut(data$opos, breaks=c(0, 0.4, 0.55, 1), labels=c("low", "medium", "high")))
+head(var.factor)
+
+# parameters of graphics
+brks1<-c(0, 0.4, 0.55, 1)
+cols<-c("red", "blue", "green")
+
+# scatterplot of values
+plot(data$opos, bg=cols[findInterval(data$opos, brks1)], pch=21)
+abline(h=c(10,20,40), lty=3)
+
+# spatial distribution with three colours
+plot(com, col=cols[findInterval(data$opos, brks1)])
+plot(pov, add=TRUE, lwd=2)
+title(main="oposition results in 2019 elections")
+legend("bottomleft", legend=c("low", "medium", "high"), leglabs(brks1), fill=cols, bty="n")
+
+joincount.test(var.factor, cont.listw) # tu tez z kolei wychodzi ze nigdzie nie ma autokorelacji
+
+
+
+# local moran
+
+
+locM<-localmoran(spNamedVec("opos", data), cont.listw)
+oid1<-order(data$Kod)
+locMorMat<-printCoefmat(data.frame(locM[oid1,], row.names=data$Kod[oid1]), check.names  = FALSE)
+
+# map of the significance of Moran's local statistics
+names(locMorMat)[5]<-"Prob"
+brks<-c(min(locMorMat[,5]), 0.05000, 0.95000, max(locMorMat[,5]))
+cols<-c("grey30", "grey90", "grey60")
+
+plot(com, col=cols[findInterval(locMorMat[,5], brks)])
+legend("bottomleft", legend=c("surrounded by relatively high values, locM>0", "insignificant", "surrounded by relatively low values, locM<0"), fill=cols, bty="n", cex=0.75)
+title(main=" Local Moran statistics ", cex=0.7)
+plot(pov, add=TRUE, lwd=2)
+
+
+
+
+
+
+
+
+
+###### modele
+
+
 # ols (od tego moran test musi wyjsc dobrze)
 
 
-# model ogolny ze wszystkim
-formula <- freq ~ expenses + femin + income + migration + people_density2019 + prework + postwork + benefit500 + unemployment + water + sewage + gas + opos + mean_enabled + place_area
+# model wyjsciowo bez place_area
+
+formula <- freq ~ expenses + femin + income + migration + people_density2019 + prework + postwork + benefit500 + unemployment + water + sewage + gas + opos + mean_enabled
 
 model_lm<-lm(formula, data=data) 
 summary(model_lm)
 
-lm.morantest(model_lm, cont.listw) # 0.07869
+lm.morantest(model_lm, cont.listw) # 0.04814
+
 
 
 # model zredukowany
-formula2 <- freq ~ expenses + femin + migration + people_density2019 + prework + postwork + benefit500 + unemployment + water + sewage + gas + opos + mean_enabled + place_area
+formula2 <- freq ~ expenses + femin + migration + people_density2019 + prework + postwork + benefit500 + unemployment + water + sewage + gas + opos + mean_enabled
 
 model_lm2<-lm(formula2, data=data) 
 summary(model_lm2)
 
 lrtest(model_lm, model_lm2)
 
-lm.morantest(model_lm2, cont.listw) # 0.077
+lm.morantest(model_lm2, cont.listw) # 0.047
 
 
-formula3 <- freq ~ expenses + femin + migration + people_density2019 + prework + postwork + benefit500 + unemployment + sewage + gas + opos + mean_enabled + place_area
+formula3 <- freq ~ expenses + femin + migration + people_density2019 + prework + postwork + benefit500 + unemployment + sewage + gas + opos + mean_enabled
 
 model_lm3<-lm(formula3, data=data) 
 summary(model_lm3)
 
 lrtest(model_lm, model_lm3)
 
-lm.morantest(model_lm3, cont.listw) # 0.07372
-
-
-
-#model dodatkowo bez sewage i gas i  place area
-
-
-formula4 <- freq ~ expenses + femin + migration + people_density2019 + prework + postwork + benefit500 + unemployment + opos + mean_enabled
-
-model_lm4<-lm(formula4, data=data) 
-summary(model_lm4)
-
-lrtest(model_lm, model_lm4) # w ten sposób już tej redukcji nie da sie uzasadnic
-
-lm.morantest(model_lm4, cont.listw) # 0.04193
-
-
-#gdy usunie sie do tego people_density (alternatywna korzystna ale mniej zmiana to usuniecie expenses)
-
-
-formula5 <- freq ~ expenses + femin + migration + prework + postwork + benefit500 + unemployment + opos + mean_enabled
-
-model_lm5<-lm(formula5, data=data) 
-summary(model_lm5)
-
-lm.morantest(model_lm5, cont.listw) # 0.02873
-
-
-
+lm.morantest(model_lm3, cont.listw) # 0.04681
