@@ -4,6 +4,7 @@ library(rgdal)
 library(dplyr)
 library(spdep)
 library(lmtest)
+library(spatialreg)
 
 
 # wczytanie danych
@@ -538,26 +539,447 @@ formula <- freq ~ expenses + femin + income + migration + people_density2019 + p
 model_lm<-lm(formula, data=data) 
 summary(model_lm)
 
+### diagnostics
+
+bptest(model_lm) # there is heteroscedasticity
+
+# Ramsey’s test for functional form
+# H1: when non-linear variables (like powers of the variables) should be included then model is mis-specified
+resettest(model_lm, power=2, type="regressor") # model is misspecified 	
+
+# spatial distribution of OLS residuals
+summary(model_lm$residuals)
+res<-model_lm$residuals
+brks<-c(min(res), mean(res)-sd(res), mean(res), mean(res)+sd(res), max(res))
+cols<-c("steelblue4","lightskyblue","thistle1","plum3")
+plot(com, col=cols[findInterval(res,brks)])
+plot(pov, add=TRUE, lwd=2)
+title(main="Reszty w modelu MNK")
+legend("bottomleft", legend=c("<mean-sd", "(mean-sd, mean)", "(mean, mean+sd)", ">mean+sd"), leglabs(brks1), fill=cols, bty="n")
+
+
+# przestrzenne testy
+
 lm.morantest(model_lm, cont.listw) # 0.04814
 
+resid<-factor(cut(res, breaks=c(-1, 0, 1), labels=c("negative","positive")))
+joincount.test(resid, cont.listw) # tutaj nie wskazuje na przestrzenna autokorelacje
 
 
-# model zredukowany
-formula2 <- freq ~ expenses + femin + migration + people_density2019 + prework + postwork + benefit500 + unemployment + water + sewage + gas + opos + mean_enabled
 
-model_lm2<-lm(formula2, data=data) 
+
+#### modele przestrzenne zwykle na pelnej bazie danych
+
+
+
+# GNS
+data$water2 <- data$water/1000
+formula2 <- freq ~ expenses + femin + income + migration + people_density2019 + prework + postwork + benefit500 + unemployment + water2 + sewage + gas + opos + mean_enabled
+GNS_1<-sacsarlm(formula2, data=data, listw=cont.listw, type="sacmixed", method="LU")
+summary(GNS_1)
+
+moran.test(GNS_1$residuals, cont.listw)
+
+#SAC
+data$expenses2 <- data$expenses/10
+formula3 <- freq ~ expenses2 + femin + income + migration + people_density2019 + prework + postwork + benefit500 + unemployment + water2 + sewage + gas + opos + mean_enabled
+SAC_1<-sacsarlm(formula3, data=data, listw=cont.listw, method="LU")
+summary(SAC_1)
+
+moran.test(SAC_1$residuals, cont.listw)
+
+#SDEM
+SDEM_1<-errorsarlm(formula, data=data, listw=cont.listw, etype="emixed", method="LU")
+summary(SDEM_1)
+
+moran.test(SDEM_1$residuals, cont.listw)
+
+#SDM
+SDM_1<-lagsarlm(formula, data=data, listw=cont.listw, type="mixed", method="LU") 
+summary(SDM_1)
+
+moran.test(SDM_1$residuals, cont.listw)
+
+#SAR
+SAR_1<-lagsarlm(formula, data=data, listw=cont.listw, method="LU")
+summary(SAR_1)
+
+moran.test(SAR_1$residuals, cont.listw)
+
+#SLX
+SLX_1<-lmSLX(formula, data=data, listw=cont.listw)
+summary(SLX_1)
+
+moran.test(SLX_1$residuals, cont.listw)
+
+#SEM
+SEM_1<-errorsarlm(formula, data=data, listw=cont.listw, method="LU")
+summary(SEM_1)
+
+moran.test(SEM_1$residuals, cont.listw)
+
+
+LR.sarlm(GNS_1, SAC_1) # SAC lepszy
+LR.sarlm(GNS_1, SDEM_1) # ledwo sdem lepszy
+LR.sarlm(GNS_1, SDM_1) # jw
+LR.sarlm(GNS_1, SAR_1) # SAR lepszy
+LR.sarlm(GNS_1, SLX_1) # tu juz bardzo bardzo ledwo na styk
+LR.sarlm(GNS_1, SEM_1) # SEM lepszy
+# czyli raczej droga SAC 
+
+LR.sarlm(SAC_1, SAR_1) # SAR lepszy
+LR.sarlm(SAC_1, SEM_1) # SEM znacznie lepszy
+
+
+
+
+
+
+
+######### modele bez zmiennej expenses i water
+
+
+formulab <- freq ~ femin + migration + income + people_density2019 + prework + postwork + benefit500 + unemployment + water + sewage + gas + opos + mean_enabled
+
+model_lm2<-lm(formulab, data=data) 
 summary(model_lm2)
 
 lrtest(model_lm, model_lm2)
 
-lm.morantest(model_lm2, cont.listw) # 0.047
 
+formulac <- freq ~ femin + migration + income + people_density2019 + prework + postwork + benefit500 + unemployment + sewage + gas + opos + mean_enabled
 
-formula3 <- freq ~ expenses + femin + migration + people_density2019 + prework + postwork + benefit500 + unemployment + sewage + gas + opos + mean_enabled
-
-model_lm3<-lm(formula3, data=data) 
+model_lm3<-lm(formulac, data=data) 
 summary(model_lm3)
 
 lrtest(model_lm, model_lm3)
 
-lm.morantest(model_lm3, cont.listw) # 0.04681
+### diagnostics
+
+bptest(model_lm3) # there is heteroscedasticity
+
+# Ramsey’s test for functional form
+# H1: when non-linear variables (like powers of the variables) should be included then model is mis-specified
+resettest(model_lm3, power=2, type="regressor") # model is misspecified 	
+
+# spatial distribution of OLS residuals
+summary(model_lm3$residuals)
+res<-model_lm3$residuals
+brks<-c(min(res), mean(res)-sd(res), mean(res), mean(res)+sd(res), max(res))
+cols<-c("steelblue4","lightskyblue","thistle1","plum3")
+plot(com, col=cols[findInterval(res,brks)])
+plot(pov, add=TRUE, lwd=2)
+title(main="Reszty w modelu MNK")
+legend("bottomleft", legend=c("<mean-sd", "(mean-sd, mean)", "(mean, mean+sd)", ">mean+sd"), leglabs(brks1), fill=cols, bty="n")
+
+
+# przestrzenne testy
+
+lm.morantest(model_lm3, cont.listw) # 0.04808
+
+resid<-factor(cut(res, breaks=c(-1, 0, 1), labels=c("negative","positive")))
+joincount.test(resid, cont.listw) # w pierwszej grupie prawie
+
+
+
+
+# Modele przestrzenne
+
+# GNS
+GNS_3<-sacsarlm(formulac, data=data, listw=cont.listw, type="sacmixed", method="LU")
+summary(GNS_3)
+
+moran.test(GNS_3$residuals, cont.listw)
+
+
+#SAC
+SAC_3<-sacsarlm(formulac, data=data, listw=cont.listw, method="LU")
+summary(SAC_3)
+
+moran.test(SAC_3$residuals, cont.listw)
+
+
+#SDEM
+SDEM_3<-errorsarlm(formulac, data=data, listw=cont.listw, etype="emixed", method="LU")
+summary(SDEM_3)
+
+moran.test(SDEM_3$residuals, cont.listw)
+
+
+#SDM
+SDM_3<-lagsarlm(formulac, data=data, listw=cont.listw, type="mixed", method="LU") 
+summary(SDM_3)
+
+moran.test(SDM_3$residuals, cont.listw)
+
+
+#SAR
+SAR_3<-lagsarlm(formulac, data=data, listw=cont.listw, method="LU")
+summary(SAR_3)
+
+moran.test(SAR_3$residuals, cont.listw)
+
+
+#SLX
+SLX_3<-lmSLX(formulac, data=data, listw=cont.listw)
+summary(SLX_3)
+
+moran.test(SLX_3$residuals, cont.listw)
+
+#SEM
+SEM_3<-errorsarlm(formulac, data=data, listw=cont.listw, method="LU")
+summary(SEM_3)
+
+moran.test(SEM_3$residuals, cont.listw)
+
+
+LR.sarlm(GNS_3, SAC_3) # SAC lepszy
+LR.sarlm(GNS_3, SDEM_3) # ledwo sdem lepszy
+LR.sarlm(GNS_3, SDM_3) # jw
+LR.sarlm(GNS_3, SAR_3) # SAR lepszy
+LR.sarlm(GNS_3, SLX_3) # tu juz bardzo bardzo ledwo na styk
+LR.sarlm(GNS_3, SEM_3) # SEM lepszy
+# czyli raczej droga SAC 
+
+LR.sarlm(SAC_3, SAR_3) # SAR lepszy
+LR.sarlm(SAC_3, SEM_3) # SEM znacznie lepszy
+
+
+
+############ frekwencja w roku poprzednim
+
+elect_old<-read.csv("data/2015-gl-lis-gm.csv", header=TRUE, dec=",", sep=";")
+
+# zsumowanie warszawy do 1 obs
+elect_old[elect_old$TERYT == 146502, c(5,26)] <- colSums(elect_old[elect_old$TERYT >= 146501 & elect_old$TERYT <= 146519, c(5,26)])
+elect_old[elect_old$TERYT == 146502, 2:3] <- c(146501, "Warszawa")
+
+# removing rest of warsaw districts and abroad/ships
+
+
+matched <- intersect(data$Kod, elect_old$TERYT)
+all <-  union(data$Kod, elect_old$TERYT)
+non_matched <- all[!all %in% matched]
+
+
+elect_old <- elect_old[elect_old$TERYT < 146502 | elect_old$TERYT > 149901,]
+
+elect_old <- elect_old[elect_old$TERYT != 229801 & elect_old$TERYT != 229901 & elect_old$TERYT != 320304,]
+
+
+# frequency
+
+elect_old$freq15 <- elect_old$GĹ.osy.waĹĽne / elect_old$Liczba.wyborcĂłw
+
+
+data <- merge(x = data, y = elect_old, by.x = "Kod", by.y = "TERYT")
+
+
+
+
+######### modele z poprzednia frekwencja
+
+formulad <- freq ~ expenses + femin + migration + income + people_density2019 + prework + postwork + benefit500 + unemployment + water + sewage + gas + freq15 + opos + mean_enabled
+
+model_lm4<-lm(formulad, data=data) 
+summary(model_lm4)
+
+### diagnostics
+
+bptest(model_lm4) # there is heteroscedasticity
+
+# Ramsey’s test for functional form
+# H1: when non-linear variables (like powers of the variables) should be included then model is mis-specified
+resettest(model_lm4, power=2, type="regressor") # model is misspecified 	
+
+# spatial distribution of OLS residuals
+summary(model_lm4$residuals)
+res<-model_lm4$residuals
+brks<-c(min(res), mean(res)-sd(res), mean(res), mean(res)+sd(res), max(res))
+cols<-c("steelblue4","lightskyblue","thistle1","plum3")
+plot(com, col=cols[findInterval(res,brks)])
+plot(pov, add=TRUE, lwd=2)
+title(main="Reszty w modelu MNK")
+legend("bottomleft", legend=c("<mean-sd", "(mean-sd, mean)", "(mean, mean+sd)", ">mean+sd"), leglabs(brks1), fill=cols, bty="n")
+
+
+# przestrzenne testy
+
+lm.morantest(model_lm4, cont.listw) # 0.2 nie ma
+
+resid<-factor(cut(res, breaks=c(-1, 0, 1), labels=c("negative","positive")))
+joincount.test(resid, cont.listw) # w pierwszej grupie jest
+
+
+
+
+# GNS
+data$unempl2 <- data$unemployment*10000
+formulad2 <- freq ~ expenses + femin + migration + people_density2019 + prework + postwork + benefit500 + unemployment + water + sewage + gas + freq15 + opos + mean_enabled
+GNS_4<-sacsarlm(formulad2, data=data, listw=cont.listw, type="sacmixed", method="LU")
+summary(GNS_4)
+
+moran.test(GNS_4$residuals, cont.listw)
+
+
+#SAC
+SAC_4<-sacsarlm(formulad2, data=data, listw=cont.listw, method="LU", tol.solve=3e-30)
+summary(SAC_4)
+
+#SDEM
+SDEM_4<-errorsarlm(formulad2, data=data, listw=cont.listw, etype="emixed", method="LU")
+summary(SDEM_4)
+
+#SDM
+W.c<-as(as_dgRMatrix_listw(cont.listw), "CsparseMatrix") 
+# the default values for the number of powers is 30
+trMat<-trW(W.c, type="mult") 
+
+SDM_4<-lagsarlm(formulad2, data=data, listw=cont.listw, type="mixed", method="LU", trs = trMat) 
+summary(SDM_4)
+
+#SAR
+SAR_4<-lagsarlm(formulad2, data=data, listw=cont.listw, method="LU", trs = trMat)
+summary(SAR_4)
+
+#SLX
+SLX_4<-lmSLX(formulad2, data=data, listw=cont.listw)
+summary(SLX_4)
+
+#SEM
+SEM_4<-errorsarlm(formulad2, data=data, listw=cont.listw, method="LU")
+summary(SEM_4)
+
+
+LR.sarlm(GNS_4, SAC_4) # SAC lepszy
+LR.sarlm(GNS_4, SDEM_4) #  sdem lepszy
+LR.sarlm(GNS_4, SDM_4) # jw
+LR.sarlm(GNS_4, SAR_4) # SAR lepszy
+LR.sarlm(GNS_4, SLX_4) # GNS lepszy
+LR.sarlm(GNS_4, SEM_4) # SEM lepszy
+# czyli raczej droga SAC 
+
+LR.sarlm(SAC_4, SAR_4) # SAc lepszy
+LR.sarlm(SAC_4, SEM_4) # SEM znacznie lepszy
+
+
+
+
+
+
+
+
+
+
+
+######### próbne 
+
+model_lm_a <- lm(opos ~ expenses + femin + migration + income + people_density2019 + prework + postwork + benefit500 + unemployment + water + sewage + gas + freq + mean_enabled, data = data)
+
+formulad <- opos ~ expenses + femin + migration + people_density2019 + prework + postwork + benefit500 + unemployment + water + sewage + gas + freq + mean_enabled
+
+model_lm4<-lm(formulad, data=data) 
+summary(model_lm4)
+
+lrtest(model_lm_a, model_lm4)
+
+
+### diagnostics
+
+bptest(model_lm4) # there is heteroscedasticity
+
+# Ramsey’s test for functional form
+# H1: when non-linear variables (like powers of the variables) should be included then model is mis-specified
+resettest(model_lm4, power=2, type="regressor") # model is misspecified 	
+
+# spatial distribution of OLS residuals
+summary(model_lm4$residuals)
+res<-model_lm4$residuals
+brks<-c(min(res), mean(res)-sd(res), mean(res), mean(res)+sd(res), max(res))
+cols<-c("steelblue4","lightskyblue","thistle1","plum3")
+plot(com, col=cols[findInterval(res,brks)])
+plot(pov, add=TRUE, lwd=2)
+title(main="Reszty w modelu MNK")
+legend("bottomleft", legend=c("<mean-sd", "(mean-sd, mean)", "(mean, mean+sd)", ">mean+sd"), leglabs(brks1), fill=cols, bty="n")
+
+
+# przestrzenne testy
+
+lm.morantest(model_lm4, cont.listw) # 0.0004642
+
+resid<-factor(cut(res, breaks=c(-1, 0, 1), labels=c("negative","positive")))
+joincount.test(resid, cont.listw) # w pierwszej grupie jest
+
+
+
+
+#### modele przestrzenne zwykle na pelnej bazie danych
+
+# GNS
+data$unempl2 <- data$unemployment*10000
+formulad2 <- opos ~ expenses + femin + migration + people_density2019 + prework + postwork + benefit500 + unempl2 + water + sewage + gas + freq + mean_enabled
+GNS_4<-sacsarlm(formulad2, data=data, listw=cont.listw, type="sacmixed", method="LU")
+summary(GNS_4)
+
+moran.test(GNS_4$residuals, cont.listw)
+
+
+#SAC
+SAC_4<-sacsarlm(formulad2, data=data, listw=cont.listw, method="LU", tol.solve=3e-30)
+summary(SAC_4)
+
+moran.test(SAC_4$residuals, cont.listw)
+
+
+#SDEM
+SDEM_4<-errorsarlm(formulad2, data=data, listw=cont.listw, etype="emixed", method="LU")
+summary(SDEM_4)
+
+moran.test(SDEM_4$residuals, cont.listw)
+
+#SDM
+
+
+W.c<-as(as_dgRMatrix_listw(cont.listw), "CsparseMatrix") 
+# the default values for the number of powers is 30
+trMat<-trW(W.c, type="mult") 
+
+SDM_4<-lagsarlm(formulad2, data=data, listw=cont.listw, type="mixed", method="LU", trs = trMat) 
+summary(SDM_4)
+
+moran.test(SDM_4$residuals, cont.listw)
+
+
+#SAR
+SAR_4<-lagsarlm(formulad2, data=data, listw=cont.listw, method="LU")
+summary(SAR_4)
+
+moran.test(SAR_4$residuals, cont.listw)
+
+
+#SLX
+SLX_4<-lmSLX(formulad2, data=data, listw=cont.listw)
+summary(SLX_4)
+
+moran.test(SLX_4$residuals, cont.listw)
+
+
+#SEM
+SEM_4<-errorsarlm(formulad2, data=data, listw=cont.listw, method="LU")
+summary(SEM_4)
+
+moran.test(SEM_4$residuals, cont.listw)
+
+
+
+LR.sarlm(GNS_4, SAC_4) # SAC lepszy
+LR.sarlm(GNS_4, SDEM_4) #  sdem lepszy
+LR.sarlm(GNS_4, SDM_4) # jw
+LR.sarlm(GNS_4, SAR_4) # SAR lepszy
+LR.sarlm(GNS_4, SLX_4) # GNS lepszy
+LR.sarlm(GNS_4, SEM_4) # SEM lepszy
+# czyli raczej droga SAC 
+
+LR.sarlm(SAC_4, SAR_4) # SAc lepszy
+LR.sarlm(SAC_4, SEM_4) # SEM znacznie lepszy
+
