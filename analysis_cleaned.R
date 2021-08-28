@@ -648,6 +648,8 @@ screenreg(list(GNS_1, SAC_1, SDM_1, SDEM_1, SAR_1, SEM_1, model_lm))
 summary(SEM_1, Hausman=TRUE) # niestety p-value od testu Hausmana = 0.99576 wiec
 #model SEM nie jest lepszy od modelu liniowego, co tez widac po tym ze AIC jest takie samo jak AIC dla lm
 
+moran.test(SEM_1$residuals, cont.listw)
+# autokorelacji sie pozbylismy tym modelem
 
 
 ### W takim razie usuniemy jakies nieistotne zmienne i probujemy od nowa
@@ -768,7 +770,12 @@ LR.sarlm(SAC_3, SEM_3) # SEM znacznie lepszy
 screenreg(list(GNS_3, SAC_3, SDM_3, SDEM_3, SAR_3, SEM_3, model_lm3))
 
 
+# diagnostyka SEM:
+summary(SEM_3, Hausman=TRUE) # niestety p-value od testu Hausmana = 0.99176 wiec
+#model SEM nadal nie jest lepszy od modelu liniowego, co tez widac po tym ze AIC jest takie samo jak AIC dla lm
 
+moran.test(SEM_3$residuals, cont.listw)
+# autokorelacji sie pozbylismy tym modelem
 
 
 # Wnioski: Tym razem wszystkie zmienne podstawowe sa istotne, ale w zasadzie niczego to nie zmienia
@@ -977,11 +984,11 @@ formula_x_st <- freq ~ femin + migration + income + people_density2019 + prework
 # ze spatio-temporal lags zamiast zwyklych spatial lags
 SAC_x_st<-sacsarlm(formula_x_st, data=data, cont.listw, tol.solve=3e-30)
 summary(SAC_x_st)
-# rzadne ze spatio-temporal lags nie sa istotne wiec wyglada na to ze jednak nic one nie pomagaja ale sprobujmy uproscic model
+# zadne ze spatio-temporal lags nie sa istotne wiec wyglada na to ze jednak nic one nie pomagaja ale sprobujmy uproscic model
 
 #drugi model to SEM z dodanymi spatio-temporal lags of x czyli w efekcie cos w stylu SDEM
-model.sac3<-errorsarlm(formula_x_st, data=data, cont.listw, tol.solve=3e-30, method = 'LU')
-summary(model.sac3)
+SEM_x_st<-errorsarlm(formula_x_st, data=data, cont.listw, tol.solve=3e-30, method = 'LU')
+summary(SEM_x_st)
 # lambda okazuje sie istotna i AIC jest minimalnie nizsze od lm ale jednak wysokie, a wszystkie spatio-temporal lags
 # sa nieistotne wiec to rowniez nie tedy droga jak widac
 
@@ -990,24 +997,121 @@ summary(model.sac3)
 
 
 
-####################### Skoro zaden model nie okazal sie dostatecznie dobry 
+####################### Skoro zaden model nie okazal sie dostatecznie dobry to sprobujmy z druga macierza powtorzyc
+# dzialania
+
+
+
+######## odtad ida modele z macierza radius ale juz bez expenses i bez water
+
+
+
+# GNS
+GNS_r<-sacsarlm(formula3, data=data, listw=radius.listw, type="sacmixed", method = 'LU')
+summary(GNS_r)
+# Lagi od Migration i opos mocno istotne, reszta wcale
+# Rho i lambda  niby sa istotne ale tak naprawde znowu sie znosza wzajemnie
+
+
+#SAC
+SAC_r<-sacsarlm(formula3, data=data, listw=radius.listw, method="LU")
+summary(SAC_r)
+# rho nieistotne za to lambda istotna wiec byc moze trzeba sie pozbyc jeszcze rho
+
+
+#SDEM
+SDEM_r<-errorsarlm(formula3, data=data, listw=radius.listw, etype="emixed", method="LU")
+summary(SDEM_r)
+# tutaj inne rozlozenie istotnosci lagow, ale wiekszosc nieistotna dalej, lambda prawie ze istotna
+
+
+
+#SDM
+SDM_r<-lagsarlm(formula3, data=data, listw=radius.listw, type="mixed", method="LU", trs = trMat) # z macierza trMat
+summary(SDM_r)
+# Gas i Unemployment istotne reszta nie, rho na granicy
+
+
+# jednoskladnikowe:
+
+#SAR
+SAR_r<-lagsarlm(formula3, data=data, listw=radius.listw, method="LU")
+summary(SAR_r)
+#AIC wyzsze niz dla lm nawet i rho nieistotne
+
+
+#SLX
+SLX_r<-lmSLX(formula3, data=data, listw=radius.listw)
+summary(SLX_r)
+# tylko gas i prawie unemployment
+
+
+#SEM
+SEM_r<-errorsarlm(formula3, data=data, listw=radius.listw, method="LU")
+summary(SEM_r)
+# Lambda jest znowu na granicy p-value=0.1096, odrobine blizej i minimalnie wieksza, lambda=0.060549,
+# AIC dalej sie nawet nie rozni od modelu liniowego
+
+
+
+
+LR.sarlm(GNS_r, SAC_r) # SAC lepszy
+LR.sarlm(GNS_r, SDEM_r) # sdem lepszy
+LR.sarlm(GNS_r, SDM_r) # jw
+LR.sarlm(GNS_r, SAR_r) # SAR lepszy
+LR.sarlm(GNS_r, SLX_r) # tu juz lekko tylko
+LR.sarlm(GNS_r, SEM_r) # SEM lepszy
+#raczej 1 skladnikowe i nie SLX mimo tych 2 lagow istotnych
+
+LR.sarlm(SAC_r, SAR_r) # SAR lepszy na styk
+LR.sarlm(SAC_r, SEM_r) # SEM znacznie lepszy
+
+
+screenreg(list(GNS_r, SAC_r, SDM_r, SDEM_r, SAR_r, SEM_r, model_lm3))
+
+
+# Wnioski: SEM znowu najlepszy, wyniki zblizone do poprzednich ale chyba troche lepsze wiec mozna powiedziec ze ten model SEM
+# z macierza konkretnego promienia odleglosci jest najlepszy ze wszystkich do tej pory choc to ciagle nie jest
+# najlepszy wynik
+
+# diagnostyka SEM:
+summary(SEM_r, Hausman=TRUE) # nadal bardzo daleko do uznania tego modelu za lepszy od linioowego choc jest znaczna roznica wzgledem poprzednich modeli
+
+
+moran.test(SEM_r$residuals, radius.listw)
+# autokorelacji sie pozbylismy tym modelem
+
+
+
+######## sprobujmy dodac spatio-temporal lags niektorych z tych zmiennych ktore byly istotne w  modelach z thethami, czyli
+# unemployment & gas
+
+formula_x_st_r <- freq ~ femin + migration + income + people_density2019 + prework + 
+  postwork + benefit500 + unemployment + sewage + gas + opos + 
+  mean_enabled + gas_st + unemployment_st
+
+# pierwszy model ten sam co wtedy, SAC z dodanymi spatio-temporal lags zmiennych niezaleznych czyli praktycznie jak GNS tylko
+# ze spatio-temporal lags zamiast zwyklych spatial lags
+SAC_x_st_r<-sacsarlm(formula_x_st_r, data=data, radius.listw, tol.solve=3e-30)
+summary(SAC_x_st_r)
+# te dwie spatio-temporal lags i tak nie sa istotne tutaj
+
+
+#drugi model to znowu SEM z dodanymi spatio-temporal lags of x czyli w efekcie cos w stylu SDEM
+SEM_x_st_r<-errorsarlm(formula_x_st_r, data=data, radius.listw, tol.solve=3e-30)
+summary(SEM_x_st_r)
+# tutaj rowniez nie sa istotne
 
 
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
+# Although Moran I statistics shows the spatial autocorelation of residuals, it is not easy to find significant
+# parameters which would eliminate this problem, probably also because this effect is so small and maybe in fact
+# negligible. One can also try different ways to deal with this problem. We'll try now to add completely new
+# variable place_area which describes approximate area belonging to one voting place. We will divide the number
+# of voting places in the given gmina by the area of this gmina
 
 
 
@@ -1020,124 +1124,69 @@ area<-read.csv("data/powierzchnia.csv", header=TRUE, dec=",", sep=";") # powierz
 colnames(area)[3] <- "area"
 area[4] <- NULL
 
+area$Kod <- area$Kod %>% as.character() %>% substr(1, nchar(area$Kod)-1) %>% as.numeric()
 
-
-# creating  rest of variables
+data <- merge(x = data, y = area, by = "Kod")
 
 data$place_area <- data$area / data$places #how big area more or less is for one place of voting
 
 
+# now our linear model with all variables is as follows:
 
+formula_pa <- freq ~ expenses + femin + income + migration + people_density2019 + prework + postwork + benefit500 + unemployment + water + sewage + gas + opos + mean_enabled + place_area
 
-
-
-
-
-
-
-
-
-
-
-
-######### modele z poprzednia frekwencja (i bez zmiennych nieistotnych water i expenses)
-
-formula4 <- freq ~ femin + migration + income + people_density2019 + prework + postwork + benefit500 + unemployment + water + sewage + gas + freq15 + opos + mean_enabled
-
-model_lm4<-lm(formulad, data=data) 
-summary(model_lm4)
-
-### diagnostics
-
-bptest(model_lm4) # there is heteroscedasticity
-
-# Ramsey’s test for functional form
-# H1: when non-linear variables (like powers of the variables) should be included then model is mis-specified
-resettest(model_lm4, power=2, type="regressor") # model is misspecified 	
-
-# spatial distribution of OLS residuals
-summary(model_lm4$residuals)
-res<-model_lm4$residuals
-brks<-c(min(res), mean(res)-sd(res), mean(res), mean(res)+sd(res), max(res))
-cols<-c("steelblue4","lightskyblue","thistle1","plum3")
-plot(com, col=cols[findInterval(res,brks)])
-plot(pov, add=TRUE, lwd=2)
-title(main="Reszty w modelu MNK")
-legend("bottomleft", legend=c("<mean-sd", "(mean-sd, mean)", "(mean, mean+sd)", ">mean+sd"), leglabs(brks1), fill=cols, bty="n")
-
+model_lm_pa<-lm(formula_pa, data=data) 
+summary(model_lm_pa) # place_area is totally significant which is a good thing for us
 
 # przestrzenne testy
 
-lm.morantest(model_lm4, cont.listw) # 0.2 nie ma
+# z contiguity matrix
+lm.morantest(model_lm_pa, cont.listw) # p-value = 0.07869 - so now it's over 5% and although it is still low and close to the 5% border we can say that spatial autocorrelation is probably not a problem anymore.
 
-resid<-factor(cut(res, breaks=c(-1, 0, 1), labels=c("negative","positive")))
-joincount.test(resid, cont.listw) # w pierwszej grupie jest
+# z knn matrix
+lm.morantest(model_lm_pa, knn.listw) # p-value = 0.459 - z ta macierza nie ma
 
+# z radius matrix
+lm.morantest(model_lm_pa, radius.listw) # p-value = 0.1215 - tu juz tym bardziej nie ma, podczas gdy poprzednio byla
 
+# z inverse distance matrix
+lm.morantest(model_lm_pa, knn_inv.dist.listw) # 0.2205 - nie ma
 
-
-# GNS
-data$unempl2 <- data$unemployment*10000
-formulad2 <- freq ~ expenses + femin + migration + people_density2019 + prework + postwork + benefit500 + unemployment + water + sewage + gas + freq15 + opos + mean_enabled
-GNS_4<-sacsarlm(formulad2, data=data, listw=cont.listw, type="sacmixed", method="LU")
-summary(GNS_4)
-
-moran.test(GNS_4$residuals, cont.listw)
-
-
-#SAC
-SAC_4<-sacsarlm(formulad2, data=data, listw=cont.listw, method="LU", tol.solve=3e-30)
-summary(SAC_4)
-
-#SDEM
-SDEM_4<-errorsarlm(formulad2, data=data, listw=cont.listw, etype="emixed", method="LU")
-summary(SDEM_4)
-
-#SDM
-W.c<-as(as_dgRMatrix_listw(cont.listw), "CsparseMatrix") 
-# the default values for the number of powers is 30
-trMat<-trW(W.c, type="mult") 
-
-SDM_4<-lagsarlm(formulad2, data=data, listw=cont.listw, type="mixed", method="LU", trs = trMat) 
-summary(SDM_4)
-
-#SAR
-SAR_4<-lagsarlm(formulad2, data=data, listw=cont.listw, method="LU", trs = trMat)
-summary(SAR_4)
-
-#SLX
-SLX_4<-lmSLX(formulad2, data=data, listw=cont.listw)
-summary(SLX_4)
-
-#SEM
-SEM_4<-errorsarlm(formulad2, data=data, listw=cont.listw, method="LU")
-summary(SEM_4)
-
-
-LR.sarlm(GNS_4, SAC_4) # SAC lepszy
-LR.sarlm(GNS_4, SDEM_4) #  sdem lepszy
-LR.sarlm(GNS_4, SDM_4) # jw
-LR.sarlm(GNS_4, SAR_4) # SAR lepszy
-LR.sarlm(GNS_4, SLX_4) # GNS lepszy
-LR.sarlm(GNS_4, SEM_4) # SEM lepszy
-# czyli raczej droga SAC 
-
-LR.sarlm(SAC_4, SAR_4) # SAc lepszy
-LR.sarlm(SAC_4, SEM_4) # SEM znacznie lepszy
+# z squared inverse distance matrix
+lm.morantest(model_lm_pa, knn_inv.dist2.listw) # 0.124 - w zasadzie nie ma
 
 
 
-screenreg(list(GNS_4, SAC_4, SDM_4, SDEM_4, SAR_4, SEM_4, model_lm4))
+
+
+############ interpretation of impacts
+
+
+# Let's take our model SEM_r (SEM with radius matrix) as the best one.
+# SEM model has only additional spatial lag of e, unobservable effect
+# It means that we can interpret the impacts in the same way we do it for
+# OLS, because the indirect, spillower effect is equal to 0. Hence we can use estimates
+# to describe the effect of x on y e.g.
+
+# I mozna by jakos podac wybrane przyklady tlumaczenia przykladow zeby udowodnic ze rozumiemy tylko nw czy notacji 
+# nie trzebaby w tym celu zmienic
+
+
+summary(SEM_r)
 
 
 
 
 
 
+###################### Podsumowanie, wyniki
 
-
-
-
+# Statystyka Marona I wskazywala na autokorelacje przestrzenna residualsow, ale nawet najprostsze modele mialy swoje pojedyncze
+# parametry na granicy istotnosci. Udawalo sie natomiast pozbyc nimi wspomnianej autokorelacji bo w SEM Maron I nie wykazywal juz jej.
+# Modele te nie byly istotnie lepsze od liniowych ale z pewnoscia byly jakims sposobem na usuniecie autokorelacji residualsow.
+# Natomiast byc moze w tym przypadku nie jest to jakies konieczne, zwlaszcza jesli mozna pozbyc sie autokorelacji w jakis inny sposob np. 
+# dodaniem nowej zmiennej. W kazdym razie nawet jesli niektore statystyki
+# wskazuja na autokorelacje, to byc moze nie musi to oznaczac ze uzycie modeli przestreznnych znaczaco poprawi wyniki
 
 
 
