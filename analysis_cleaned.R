@@ -1,4 +1,4 @@
-# libraries used (w pliku z 1 zajec sa opisy bibliotek do czego sluza)
+# libraries used (w pliku z 1 zajec sa opisy bibliotek do czego sluza jbc)
 
 library(rgdal)
 library(dplyr)
@@ -389,16 +389,16 @@ frequency in 2019 elections")
 # join count test
 
 
-var.factor<-factor(cut(data$freq, breaks=c(0, 0.5, 0.6, 1), labels=c("low", "medium", "high")))
+var.factor<-factor(cut(data$freq, breaks=c(0, 50, 60, 100), labels=c("low", "medium", "high")))
 head(var.factor)
 
 # parameters of graphics
-brks1<-c(0, 0.5, 0.6, 1)
+brks1<-c(0, 50, 60, 100)
 cols<-c("red", "blue", "green")
 
 # scatterplot of values
 plot(data$freq, bg=cols[findInterval(data$freq, brks1)], pch=21)
-abline(h=c(10,20,40), lty=3)
+abline(h=c(50,60), lty=3)
 
 # spatial distribution with three colours
 plot(com, col=cols[findInterval(data$freq, brks1)])
@@ -433,7 +433,7 @@ plot(pov, add=TRUE, lwd=2)
 
 
 
-# tu jeszcze moran dla samej zmiennej opos, moze mozna pokazac ze np zmienne
+# tu jeszcze moran dla samej zmiennej opos i dla unemployment, moze mozna pokazac ze np zmienne
 # niezalezne maja przestrzenna autokorelacje, natomiast dalsze wykresy itp to usunalem, jak chcesz to sa w starym pliku
 
 #Moran I - opos
@@ -525,7 +525,6 @@ joincount.test(resid, radius.listw) # za to tu nie ma
 lm.morantest(model_lm, knn_inv.dist.listw) # 0.15 - nie ma
 
 joincount.test(resid, knn_inv.dist.listw) # nie ma
-
 
 
 # z squared inverse distance matrix
@@ -712,7 +711,7 @@ summary(GNS_3)
 #SAC
 SAC_3<-sacsarlm(formula3, data=data, listw=cont.listw, method="LU")
 summary(SAC_3)
-# rho nieistotne za to lambda istotna wiec byc moze trzeba sie pozbyc jeszcze rho
+# rho nieistotne za to lambda prawie istotna wiec byc moze trzeba sie pozbyc jeszcze rho
 
 
 #SDEM
@@ -989,7 +988,7 @@ summary(SAC_x_st)
 #drugi model to SEM z dodanymi spatio-temporal lags of x czyli w efekcie cos w stylu SDEM
 SEM_x_st<-errorsarlm(formula_x_st, data=data, cont.listw, tol.solve=3e-30, method = 'LU')
 summary(SEM_x_st)
-# lambda okazuje sie istotna i AIC jest minimalnie nizsze od lm ale jednak wysokie, a wszystkie spatio-temporal lags
+# lambda okazuje sie praktycznie istotna i AIC jest minimalnie nizsze od lm ale jednak wysokie, a wszystkie spatio-temporal lags
 # sa nieistotne wiec to rowniez nie tedy droga jak widac
 
 
